@@ -1,0 +1,501 @@
+---
+title: 'ECON 1190 Problem Set 6: Regression Discontinuity'
+author: "Claire Duquennois"
+date: ""
+output:
+ pdf_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+***Name:***
+
+
+
+# Empirical Analysis using Data from Manacorda, Miguel, & Vigorito (2011, American Economic Journal: Applied Economics)
+
+
+This exercise uses data from Manacorda, Miguel, & Vigorito's paper, "Government Transfers and Political Support," published in the *American Economic Journal: Applied Economics* in 2011. This paper studies how receipt of a government anti-poverty cash transfer changes how beneficiary households support and view the government. 
+
+The data can be found on Edward Miguel's faculty website. Download and extract the contents from the `Government_Transfers_replication.zip` file. 
+
+
+
+**Submission instructions:**
+
+1) Knit your assignment in PDF.
+
+2) **Assignment shell extra credit:** You will receive a little extra credit if your answers line up correctly with the answer positions of the template on gradescope. For this to work 
+
+- **Work by putting your answers directly into this R markdown file that is pre-formatted for you!**
+
+- Make sure you have ONE question and answer per page (this is how the template is structured and  allows gradescope to easily find your answers), unless the question indicated that the answer will require two pages because of large tables. 
+
+- Your final PDF should be 25 pages. 
+
+- You can insert needed page breaks as illustrated below
+
+- Make sure you do not "print" the data. If you change the data, make sure you store with a structure like: newname<-modification(olddata). If you only type modification(olddata), R will display the data rather than saving your modifications
+
+
+3) Upload your assignment PDF to gradescope.
+
+
+\pagebreak
+
+
+# Set up and constructing the data
+
+The original data used in the paper is confidential. The authors instead provide the `reg_panes.dta` data file which is anonymized and created from the original data. 
+
+## Question: Loading the Packages
+
+Load any R packages you will be using:
+
+**Code:**
+```{r, warning=FALSE,message=FALSE}
+library(haven)
+library(ggplot2)
+library(dplyr)
+library(lfe)
+library(stargazer)
+```
+
+
+
+
+
+\pagebreak
+
+## Question: Open the `reg_panes.dta` file. To complete this problem set you will need the following variables from this data file: 
+
+| Name            |Description                                        |
+|-----------------|---------------------------------------------------|
+|aprobado         |Ever received PANES 2005-2007                      |
+|untracked07      | Untracked in 2007                                 |
+|h_89             |Supports current government 2007 [1 to 3]|         |
+|hv34             |Supports current government 2008 [1 to 3]|         | 
+|ind_reest        |Predicted Income                                   | 
+|newtreat         |PANES eligibility                                  |
+
+
+
+Drop all other variables. If needed, give the variables you are keeping more intuitive names. 
+
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+data <- read_dta("C:\\Users\\Nachu\\Downloads\\reg_panes.dta") #read data
+data <- data %>% select (aprobado,untracked07,h_89,hv34,ind_reest,newtreat)#keep required variables
+```
+
+
+\pagebreak
+
+## **Question: The data as downloaded will require that you clean the variables of interest and construct a new dataset to generate the graphs. Start by generating the following cleaned variable:**
+
+-An indicator for receiving PANES that is NA if a respondent is untracked in 2007
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+data <- data%>%mutate(recPANES = ifelse(untracked07 == 1, NA, aprobado))
+```
+
+
+\pagebreak
+
+## **Question: We are going to re-scale the variables that indicate support for the current government so that responses range from 0 to 1. To do this, tabulate the current variable to see how it is distributed and then generate a variable that will be NA if it is currently coded as 9, 0 if currently 2, 0.5 if currently 1 and 1 if currently 3. Do this for both the 2007 and 2008 variable. **
+
+Note: This is how the authors modify this variable in their code. It seems counter intuitive and does not correspond to the description of how this variable is coded in the survey questionnaire as reported in their appendix though it does correspond to their discussion in footnote 12. My guess is the transcription/translation of the survey question is incorrect.
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+data <- data %>%
+  mutate(supp07 = case_when(
+    h_89 == 9 ~ NA, 
+    h_89 == 2 ~ 0,        
+    h_89 == 1 ~ 0.5,     
+    h_89 == 3 ~ 1         
+  ))
+data <- data %>%
+  mutate(supp08 = case_when(
+    hv34 == 9 ~ NA, 
+    hv34 == 2 ~ 0,        
+    hv34 == 1 ~ 0.5,      
+    hv34 == 3 ~ 1 
+  ))
+```
+
+
+\pagebreak
+
+## **Question: Generate a variable that is the square of predicted income.**
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+data <- data %>% mutate("pred_income_sq" = round((ind_reest)^2,6)) 
+data$pred_income_sq <- format(data$pred_income_sq, scientific = FALSE)
+
+```
+
+\pagebreak
+
+# We start by reproducing the main figures (2, 3,and 4) of the paper as good figures are key to any regression discontinuity paper.
+
+
+## **Question: The data consists of over 3000 observations. How many points are plotted on these figures? How should we interpret the y axis? How many points are plotted below the threshold? How many points are plotted above the threshold?**
+
+**Answer:**
+ A total of 45 points - 30 for eligible households (below threshold) and 15 for ineligible ones (above threshold) are plotted. A total of 2232 households are plotted, with approximately 43 in each bin.If predicted income is below the threshold point (below cut-off point at 0) 100% are enrolled in PANES,which is represented as 1 in y-axis. If beyond the threshold (above cut off point at 0), 0% are enrolled in PANES.
+
+\pagebreak
+
+## **Question: Why is the number of points above the threshold different from the number below? **
+
+**Answer:**
+There are twice as many PANES eligible households compared to non eligible households. So number of points below threshold is 30 and number of points above threshold is 15. 
+\pagebreak
+
+
+## **Question: Replicating these figures will require restructuring our data and calculating the values that are plotted. Generate a variable that will indicate the percentile group the observation is in. Note the difference in the number of percentile groups above and below the threshold. **
+
+Hint: you may find the `xtile` function in R useful. Use it to split the sample below the threshold into 30 bins. Then split the sample at or above the threshold into 15 bins. The make sure the bin numbers above and below the threshold are not repeated and will be ordered correctly.
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+data <- data %>%
+  mutate(bel_thresh = ifelse(ind_reest < 0, ind_reest, NA)) #seperate below threshold values
+
+data <- data %>%
+  mutate(abv_thresh = ifelse(ind_reest > 0, ind_reest, NA)) # seperate above threshold values
+
+data <- data %>%
+  mutate(neg_bins = ifelse(!is.na(bel_thresh), ntile(bel_thresh, 30), NA)) #create 30 bins for below threshold values
+
+data <- data %>%
+ mutate(pos_bins = ifelse(!is.na(abv_thresh), ntile(abv_thresh, 15), NA) ) #create 15 bins for above threshold values
+
+data$pos_bins <- data$pos_bins+30 #numbers not repeated and ordered
+```
+
+
+
+\pagebreak
+
+
+## **Question: For each of the percentile groups, calculate the mean of each of the variables we will use for plotting: predicted income, receipt of PANES, support for the government in 2007, and support for the government in 2008.**
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+
+data <- data %>%
+  mutate(
+    bins = coalesce(neg_bins, pos_bins)  # Combine negative and positive bins
+  )
+
+mean_stats <- data %>%
+  group_by(bins) %>%  # Group by bins
+  summarize(
+    mean_income = mean(ind_reest, na.rm = TRUE),
+    mean_enrolled = mean(aprobado, na.rm = TRUE),
+    mean_supp07 = mean(supp07, na.rm = TRUE),
+    mean_supp08 = mean(supp08, na.rm = TRUE),
+    .groups = "drop"  # Avoid grouped output
+  )
+```
+
+
+
+\pagebreak
+
+
+## **Question: Replicate figure 2. Make the figure as clear and informative as possible. You may want to create an indicator variable for percentiles above and below the threshold. ** 
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+ggplot(mean_stats, aes(x = mean_income, y = mean_enrolled)) +
+  geom_point(size = 3, color = "blue") +  # Points for mean values
+  geom_vline(xintercept = 0, color = "red") +  # Horizontal line at y=0
+  labs(
+    title = "PANES enrollment for each mean_income bin",
+    x = "Mean_Income",
+    y = "PANES Enrollment %"
+  ) +
+  theme_minimal()
+```
+
+
+\pagebreak
+
+
+## **Question: What is the purpose of this figure and what should we take away from it? **
+
+**Answer:**
+This figure shows that below the income threshold, all households are enrolled to PANES progra and above income threshold, none of the households are not enrolled in PANES program.This is a case of sharp RD. There is sharp discontinuity at the threshold after introduction of policy.So all households below income threshold,indeed recieved the PANES benefit. 
+\pagebreak
+
+## **Question: Replicate figures  3 and 4. Make these figures as clear and informative as possible (2pages).  **
+```{r,warning=FALSE,message=FALSE}
+#Figure 3
+ggplot(mean_stats, aes(x = mean_income, y = mean_supp07)) +
+  geom_point(size = 3, color = "blue") +  
+  geom_vline(xintercept = 0, color = "red") +
+  geom_smooth(data = subset(mean_stats, mean_income<0),method = "lm", se = FALSE, color = "black")+
+  geom_smooth(data = subset(mean_stats, mean_income>0),method = "lm", se = FALSE, color = "black")+  
+  scale_y_continuous(breaks = seq(0.6, 1, by = 0.1), limits = c(0.6, 1))+
+  labs(
+    title = "% Support for government in 2007 - Below and above income thresholds",
+    x = "Predicted Income",
+    y = "Support for government in"
+  ) +
+  theme_minimal()
+
+
+```
+
+\pagebreak
+
+```{r,warning=FALSE,message=FALSE}
+#Figure 4
+ggplot(mean_stats, aes(x = mean_income, y = mean_supp08)) +
+  geom_point(size = 3, color = "blue") +  
+  geom_vline(xintercept = 0, color = "red") +
+  geom_smooth(data = subset(mean_stats, mean_income<0),method = "lm", se = FALSE, color = "black")+
+  geom_smooth(data = subset(mean_stats, mean_income>0),method = "lm", se = FALSE, color = "black")+  
+  scale_y_continuous(breaks = seq(0.6, 1, by = 0.1), limits = c(0.6, 1))+
+  labs(
+    title = "% Support for government in 2008 - Below and above income thresholds",
+    x = "Predicted Income",
+    y = "Support for government"
+  ) +
+  theme_minimal()
+```
+\pagebreak
+
+## **Question: Interpret these figures. What should we take away from them? **
+
+**Answer:** 
+The figures shows support of the government by households that are just above and beyond the PANES eligibility threshold in 2007 and 2008. Both in 2007 and 2008, there is a discontinuity at 0 showing increased support for government below threshold (they were eligible to PANES) by around 8-10%.This indicates that households that were below the threshold supported the government more, though they were similar to households above the threshold in most ways except the receipt of PANES support.
+
+It also shows that even post the program, support for government is higher among house holds that had earlier received PANES. However, the overall support % dropped slightly. Intercept in 2007 for PANES eligible households is around 88% and it is around 83% in 2008. In non-eligible households intercept in 2007 is around 76% and in 2008 it is around 73%.
+
+\pagebreak
+
+
+## **Question: Replicate the results of the three regressions estimated in the first column of table 1. Present your results in a table. Interpret the coefficients.**
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+reg1 <- felm(recPANES~newtreat, data = data)
+reg2 <- felm(supp07~newtreat, data = data)
+reg3 <- felm(supp08~newtreat, data = data)
+stargazer(reg1,reg2,reg3,
+          type="text",
+          column.labels = "Ever received PANES",
+          covariate.labels = c("PANES Eligible","Mean non-eligibles"))
+
+
+```
+
+
+
+**Answer:**
+Reg1 - 99.3% of household eligible to receive PANES support actually received it between 2005-07.
+Reg2 - Being PANES eligible improved support to the government from these households by 12.9% over non-eligible households in 2007. 
+Reg3 - Being PANES eligible and receiving support in 2005-07 improved support to the government from eligible households by 11.8% over non-eligible households in 2008.
+
+The constant in Reg 2 and 3 (mean non eligibles) show the mean support by households not eligible for PANES (households above threshold).All results are statistically significant.   
+
+\pagebreak
+
+
+## **Question: Write down the specifications used in row 2 of columns 1,2 and 3 of table 1. **
+
+**Answer:**
+Col 1 - Support to gov in 2007 ~ PANES eligibility
+Col 2 - Support to gov in 2007 ~ PANES eligibility + (Predicted income - cutoff point) +( PANES eligibility  * (predicted income)^2)
+Col 3  -Support to gov in 2007 ~ PANES eligibility + (Predicted income - cutoff point) +( PANES eligibility * (predicted income)^2)
+
+\pagebreak
+
+
+## **Question: Replicate the results reported in row 2 of Table 1 columns 1, 2 and 3. Explain the difference between these specifications and interpret their coefficients. (2 pages)**
+Hint: the variables listed in the table above after newtreat are the controls you will want to include.
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+data$ind_reest <- as.numeric(data$ind_reest)
+data$pred_income_sq <- as.numeric(data$pred_income_sq)
+
+reg4 <- felm(supp07~newtreat+ind_reest+ind_reest*newtreat,data)
+reg5 <- felm(supp07~newtreat+ind_reest+ind_reest*newtreat+pred_income_sq*newtreat,data)
+stargazer(reg2,reg4,reg5, 
+          type="text")
+```
+\pagebreak
+
+
+**Answer:**
+The 3 regressions show impact of being treated on the support for government in 2007.
+
+Col 1 - Shows that if the household is eligible to be treated (Intent to treat), Support for government by that household increases by 12.9% over the non-eligible household.It is the treatment effect. 
+
+Col 2 - A first degree polynomial is added to the regression.if the household is eligible to be treated (Intent to treat), Support for government by that household increases by 11% over the non-eligible household.The interaction term is statistically insignificant with a larger SE, indicating there is not major difference in slopes between households under and over the threshold.
+
+Col 3 - A second degree polynomial(income squared) is added to the regression.if the household is eligible to be treated (Intent to treat), Support for government by that household increases by 13% over the non-eligible household.The interaction term is statistically insignificant and has a large standard error indicating no difference in curvature.  
+
+Treatment effect at cutoff is statistically significant with a low standard error. 
+
+\pagebreak
+
+
+## **Question: What is the point of including all of these specifications?**
+
+**Answer:**
+Beta of Running variable (predicted income) shows the slope of the non-eligible households.
+Beta of interaction term (predicted income*treatment )show difference in slope between eligible and non-eligible households.
+Beta of quadratic interaction term (predicted income^2 * treatment) if the fitted lines are curved, and the difference in curvature. 
+ 
+By understanding difference in slopes and the curvature we can understand the impact of treatment on either side of the threshold beyond the cut off point.
+\pagebreak
+
+
+## **Question: Using the coefficients estimated above, write out the function you would use to predict the probability a household supports the current government based on their predicted income score: **
+
+**a) If they are eligible for the transfer using the results from column 1.**
+
+**b) If they are not eligible for the transfer using the results from column 1.**
+
+**c) If they are eligible for the transfer using the results from column 2.**
+
+**d) If they are not eligible for the transfer using the results from column 2.**
+
+**e) If they are eligible for the transfer using the results from column 3.**
+
+**f) If they are not eligible for the transfer using the results from column 3.**
+
+**Answer:**
+
+a) predicted Y = 0.772 + 0.129(1) = 0.901
+
+b) predicted Y = 0.772 + 0.129(0) = 0.772
+
+c) predicted Y = 0.772 + 0.110(1) + (-0.011 * ind_reest) + (-1.916 * ind_reest * 1)
+
+= 0.882 + (-0.011 * ind_reest)+ (-1.916 * ind_reest)
+ 
+d) predicted Y = 0.772 + 0.110(0) + (-0.011 * ind_reest) + (-1.916 * ind_reest * 0) 
+
+= 0.772 + (-0.011 * ind_reest)
+
+e) predicted Y = 
+0.769 + 0.130(1) + (0.853 * ind_reest) + (-42.449 * pred_income_sq) + (2.352 * ind_reest * 1) + 
+(294.929 * 1 * pred_income_sq)
+
+= 0.899 + (0.853 * ind_reest) + (-42.449 * pred_income_sq) + (2.352 * ind_reest) + (294.929 * pred_income_sq)
+
+f) predicted Y = 
+0.769 + 0.130(0) + (0.853 * ind_reest) + (-42.449 * pred_income_sq) + (2.352 * ind_reest * 0) + 
+(294.929 * 0 * pred_income_sq) 
+
+= 0.769 + (0.853 * ind_reest) + (-42.449 * pred_income_sq)
+
+
+\pagebreak
+
+
+## **Question: How narrow is the "bandwidth" used by the authors. Why does this matter? Check that the results are robust to a narrower bandwidth. **
+
+**Code:**
+```{r,warning=FALSE,message=FALSE}
+#Filter data to a smaller threshold, create new bins, plot to check if discontinuity persists.
+
+data$ind_reest <- as.numeric(data$ind_reest)
+
+robust_data <- data %>% filter(ind_reest >= -0.01 & ind_reest <= 0.01)
+robust_data <- robust_data %>%
+  mutate(bel_thresh = ifelse(ind_reest < 0, ind_reest, NA)) #seperate below threshold values
+
+robust_data <- robust_data %>%
+  mutate(abv_thresh = ifelse(ind_reest > 0, ind_reest, NA)) # seperate above threshold values
+
+robust_data <- robust_data %>%
+  mutate(neg_bins = ifelse(!is.na(bel_thresh), ntile(bel_thresh, 30), NA)) #create 30 bins for below threshold values
+
+robust_data <- robust_data %>%
+ mutate(pos_bins = ifelse(!is.na(abv_thresh), ntile(abv_thresh, 15), NA) ) #create 15 bins for above threshold values
+
+robust_data$pos_bins <- robust_data$pos_bins+30 #numbers not repeated and ordered
+data <- data %>%
+  mutate(
+    bins = coalesce(neg_bins, pos_bins)  # Combine negative and positive bins
+  )
+```
+
+```{r}
+mean_stats_robust <- robust_data %>%
+  group_by(bins) %>%  # Group by bins
+  summarize(
+    mean_income = mean(ind_reest, na.rm = TRUE),
+    mean_enrolled = mean(aprobado, na.rm = TRUE),
+    mean_supp07 = mean(supp07, na.rm = TRUE),
+    mean_supp08 = mean(supp08, na.rm = TRUE),
+    .groups = "drop"  # Avoid grouped output
+  )
+
+ggplot(mean_stats_robust, aes(x = mean_income, y = mean_supp08)) +
+  geom_point(size = 3, color = "blue") +  
+  geom_vline(xintercept = 0, color = "red") +
+  geom_smooth(data = subset(mean_stats, mean_income<0),method = "lm", se = FALSE, color = "black")+
+  geom_smooth(data = subset(mean_stats, mean_income>0),method = "lm", se = FALSE, color = "black")+  
+  scale_y_continuous(breaks = seq(0.6, 1, by = 0.1), limits = c(0.6, 1))+
+  scale_x_continuous(limits = c(-0.015, 0.015))+
+  labs(
+    title = "% Support for government in 2008 - Below and above income thresholds",
+    x = "Predicted Income",
+    y = "Support for government"
+  ) +
+  theme_minimal()
+
+```
+
+
+**Answer:**
+The bandwith used by the authors is quite narrow. Discontinuity can be observed from the plotted points in a even narrower bandwith (normalised PANES score between -0.01 and 0.01, reduced from earlier bandwith by 0.01). This is important because it proves discontinuity in running variable is not due to other factors (up and down movement due to change in trends etc. ), but due to the treatment effect. 
+
+
+
+
+
+## **Question: The authors attribute these effects to the causal effect of receiving the government transfers. What is the implied assumption behind this interpretation?**
+
+**Answer:**
+The implied assumption behind this assumption is that nothing else changes above and beyond the threshold except being eligible for PANES under the threshold and not being eligible above the threshold. The households in the bandwidth are similar in all aspects except being eligible or not eligible for PANES.Whether an household is above or below the income threshold is as good as random. 
+
+
+\pagebreak
+
+
+## **Question: What evidence do they provide to support this assumption?**
+
+**Answer:**
+The authors designed questionnaire for similar households in the bandwith and ensured participants do not associate the survey with PANES. So households are similar in all aspects, and the survey respondents being eligible or not eligible for PANES based on income differences is random. 
+
+\pagebreak
+
+
+## **Question: Was this threshold eligibility score specifically designed for this particular program? Why does this matter?**
+
+**Answer:**
+Yes, because the respondents should not associate the eligibility score with PANES.If they do that, it would affect the validity of the data - it is not random, and people may enter values that they might associate with increased possibility of receiving PANES support.  
+
+\pagebreak
+
+
+
+
+
+
+

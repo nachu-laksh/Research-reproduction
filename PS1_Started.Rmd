@@ -1,0 +1,374 @@
+---
+title: 'Problem Set 1: Getting Started'
+author: "Claire Duquennois"
+output:
+  pdf_document: default
+  html_document:
+    number_sections: yes
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+```
+***NAME:Nachu Lakshmanan***
+
+
+**Empirical Analysis using Data from Washington (2008, AER)**
+
+
+This exercise uses data from Ebonya Washington's paper, "Female Socialization: How Daughters Affect their Legislator Father's voting on Women's Issues," published in the *American Economic Review* in 2008. This paper studies whether having a daughter affects legislator's voting on women's issues. 
+
+**Submission instructions:**
+
+1) Knit your assignment in PDF.
+
+2) **Assignment shell extra credit:** You will receive a little extra credit if your answers line up correctly with the answer positions of the template on gradescope. For this to work 
+
+- **Work by putting your answers directly into this R markdown file that is pre-formatted for you!**
+
+- Make sure you have ONE question and answer per page (this is how the template is structured and  allows gradescope to easily find your answers), unless the question indicated that the answer will require two pages because of large tables. 
+
+- Your final PDF should be 19 pages. 
+
+- You can insert needed page breaks as illustrated below
+
+- Make sure you do not "print" the data. If you change the data, make sure you store with a structure like: newname<-modification(olddata). If you only type modification(olddata), R will display the data rather than saving your modifications
+
+
+3) Upload your assignment PDF to gradescope.
+
+
+**Finding the data**
+
+I have downloaded Washington's `basic.dta` file and made it available in the RCloud assignment workspace. I downloaded this data from the AER's website which links you to the ICPSR's data repository. Anyone can sign in to get access to the replication data files. These include the typical files in a replication folder: several datasets, several .do files (which is a STATA command file), and text files with the data descriptions which tell you about the different variables included in the dataset. 
+
+
+# Set up and opening the data
+
+Because this is a `.dta` file, you will need to open it with the `read.dta` function that is included in the `haven` packages.
+
+Other packages you will need: `dplyr`, `ggplot2`, `lfe` and `stargazer`. 
+
+If you are working on a desktop version of R (i.e not in the cloud workspace) and have not used a package before you will need to install the packages by un-commenting (removing the #) the following code. If you are working in R Studio Cloud these should load automatically or you will be prompted to load them. 
+
+```{r packages}
+
+install.packages('haven',repos = "http://cran.us.r-project.org")
+install.packages('lfe',repos = "http://cran.us.r-project.org")
+
+```
+Hint: Once you have run these once, on your machine, you may want to comment them out with a # so that your code runs faster (it is not necessary to reinstall a package every single time).
+
+\pagebreak
+## Question 1.1: 
+**In the following chunk, call all the packages you will be using with the `library` function.**
+
+```{r library}
+library(dplyr)
+library(stargazer)
+library(ggplot2)
+library(haven)
+library(lfe)
+
+```
+
+
+
+
+ 
+\pagebreak
+## Question 1.2: 
+**Below, create a code chunk in which you load your data. Remember, since `basic.dta` is a .dta file, you will use the `read.dta()` function to load it.**
+Hint: code chunks start and end with ``` and, as above, need to be given a name in {}. When needed, you can also specify setting for the chunk in these brackets. 
+```{r}
+data <- read_dta("C:\\Users\\Nachu\\Downloads\\basic.dta") #loading data
+```
+
+
+
+\pagebreak
+## Question 1.3: 
+**How many observations are in the original dataset?**
+
+Hint: use the `nrow()` function. 
+
+**Code and Answer:**
+```{r}
+nrow(data) #finding number of rows
+```
+
+
+
+
+\pagebreak
+# Cleaning the data
+
+## Question 2.1:
+**The original dataset contains data from the 105th to 108th U.S. Congress reported in the variable `congress`. We only want to keep the observations from the 105th congress.**
+
+Hint: Use the `filter` function in the `dplyr` package.
+
+**Code:**
+```{r}
+data_105 <- data %>% filter(congress == 105)  #Filtering observations from 105th congress
+```
+
+
+
+\pagebreak
+## Question 2.2:
+**The dataset contains many variables, some of which are not used in this exercise. Keep the following variables in the final dataset** 
+
+Hint: use the `select` function in `dplyr`. 
+
+| Name     |Description                                                             |
+|----------|------------------------------------------------------------------------|
+|aauw	     |AAUW score                                                              | 
+|nowtot    |NOW score                                                               | 
+|totchi	   |Total number of children                                                |
+|ngirls	   |Number of daughters                                                     |
+|party	   |Political party. Democrats if 1, Republicans if 2, and Independent if 3.|
+|female	   |Female dummy variable                                                   |
+|age	     |Age                                                                     |
+
+
+**You can find the detailed description of each variable in the original paper. The main variable in this analysis is `AAUW`, a score created by the American Association of University Women (AAUW). For each congress, AAUW selects pieces of legislation in the areas of education, equality, and reproductive rights. The AAUW keeps track of how each legislator voted on these pieces of legislation and whether their vote aligned with the AAUW’s position. The legislator’s score is equal to the proportion of these votes made in agreement with the AAUW.**
+
+**Code:**
+```{r}
+data_105 <- data_105 %>% select(aauw,nowtot,totchi,ngirls,party,female,age) #removing unwanted columns
+```
+
+
+
+\pagebreak
+## Question 2.3:
+**Make sure your final dataset is a data frame. You can check your data's format with the command `is()`. If the first element of the returned vector is not "data.frame", convert your dataset with the function `as.data.frame()`.** 
+
+**Code:**
+```{r}
+is(data_105) #check data type
+data_105 <- as.data.frame(data_105) #covert into dataframe
+is(data_105) 
+```
+
+
+
+
+\pagebreak
+#  Summary Statistics
+
+## Question 3.1: 
+**Report summary statistics for all the remaining variables in the dataset. Present these summary statistics in a formatted table, you can use `stargazer` or other packages. Make this table as communicative as possible.**
+
+Hints: If you want RMarkdown to display your outputted table, include the code `results = "asis"` in the chunk header. This is true for all chunks that output a formatted table. In the stargazer command, you will want to specify the format of the table by including the code `type="latex"` for PDF output. If you have trouble knitting to PDF, try installing MikTex (https://miktex.org/download)
+
+**Code:**
+```{r, results = 'asis'}
+data_105_summary <- data_105 %>% group_by(party,ngirls) %>% 
+                    summarise (
+                      total_mem_count = n(),
+                      fem_mem_count = sum(female),
+                      mean_age_mem = round(mean(age),2),
+                      mean_aauw = round(mean(aauw),2),
+                      sd_aauw= round(sd(aauw),2),
+                      mean_now = round(mean(nowtot),2),
+                      sd_now = round(sd(nowtot),2),
+                      )
+#grouping mean and SD of scores by party and number of daughters
+                             
+         
+
+data_105_1 <- data_105_summary %>% filter(party == 1,total_mem_count >1)
+data_105_2 <- data_105_summary %>% filter(party == 2, total_mem_count >1) 
+# filtering into 2 sets of data by party
+
+
+
+
+stargazer(data_105_1, type = "latex", title = "Summary Statistics for Democrats",
+          summary = FALSE, font.size = "small",rownames = FALSE,column.sep.width = "0.5pt")
+
+
+stargazer(data_105_2, type = "latex", title = "Summary Statistics for Republicans",
+          summary = FALSE, rownames = FALSE,font.size = "small",column.sep.width = "0.5pt")
+
+```
+
+
+
+\pagebreak
+#  Generate Variables
+
+## Question 4.1: 
+**Construct a variable called $repub$, a binary set to 1 if the observation is for a republican, 0 otherwise.**
+
+**Code:**
+```{r}
+data_105 <- data_105 %>% mutate(repub = ifelse(party == 2,1,0)) 
+#adding new dummyvariable - republicans is 0.
+```
+
+
+\pagebreak
+## Question 4.2: 
+**Construct a variable called $age2$,  where $\text{age2=age}^2$.**
+
+**Code:**
+```{r}
+data_105 <- data_105 %>% mutate(age2 = age^2) 
+#adding new variable age^2
+```
+
+
+\pagebreak
+# Analysis
+## Question 5.1 (2 pages): 
+**Estimate the following linear regression models using the `felm` command (part of the lfe package). Report all three regression results in one formatted table using  `stargazer`. Report robust standard errors in your table.** 
+
+Hints: 
+
+- in stargazer, to get robust standard errors, specify `se = list(model1$rse, model2$rse, model3$rse)`  and `type = "latex"`. 
+- your estimates of $\beta_1$ should be similar, but not exactly the same, as the estimate in the first row, second column of table 2 in Washington(2008).
+- make sure you specify results = "asis" in the chunk header to print the table
+
+
+
+$$
+\begin{aligned}
+ \text{Model 1: }aauw_i&=\beta_0+\beta_1ngirls_i+\beta_2totchi+\epsilon_i\\
+ \text{Model 2: }aauw_i&=\beta_0+\beta_1ngirls_i+\beta_2totchi+\beta_3female_i+\beta_4repub_i+\epsilon_i\\
+ \text{Model 3: } aauw_i&=\beta_0+\beta_1ngirls_i+\beta_2totchi+\beta_3female_i+\beta_4repub_i+\beta_5 age_i+\beta_6 age^2_i+\epsilon_i\\
+\end{aligned}
+$$
+
+
+**Code:**
+```{r, results = 'asis'}
+model1 <- felm( aauw ~ ngirls+totchi, data = data_105)
+model2<- felm( aauw ~ ngirls+totchi+female+repub, data = data_105)
+model3 <- felm( aauw ~ ngirls+totchi+female+repub+age+age2, data = data_105) 
+#3 regression models using felm
+
+
+
+stargazer(model1, model2, model3,
+          se = list(model1$rse, model2$rse, model3$rse),
+          type = "latex",
+          title = "Regression Results",
+          column.labels = c("Model 1","Model 2","Model 3" ),
+          covariate.labels = c("Number of daughters", 
+                               "Total Children", 
+                               "Gender of congress member", 
+                               "Republican", 
+                               "Age", 
+                               "Age Squared"))  
+#present reg using stargazer
+```
+
+\pagebreak
+## Question 5.2: 
+
+**Interpret your estimate of $\beta_1$ from the first regression. Be sure to touch upon Sign, Size and Significance**
+
+**Answer:**
+The B1 coefficient is 5.776 with a SE of 2.714, with p<0.05, indicating statistical significance. The number of daughters a congress member has positively influences his AAUW score. Having one less daughter would reduce the AAUW score by [0.35,11.2] at a 95% confidence level. However, the confidence interval ranges from close to 0 to 11, suggesting the effect may or may not be substantial.  
+
+\pagebreak
+## Question 5.3: 
+
+**How does age relate to the aauw score? At what age does the relationship between the aauw score and age ``flip''? Is this relationship statistically significant? **
+
+**Answer:**
+For age, the p value  is greater than 0.1, indicating that it may be statistically insignificant factor. Age has a positive relationship with AAUW score with a co-efficient of 0.81 and SE of 0.97. However age^2 has a negative relationship with a co-efficient of -0.006. To find at what age AAUW score is maximum, differentiate AAUW score = 0.814age-0.0120age^2 with respect to age. age = 0.814/0.0120 = 67.8. Beyond 67, AAUW score falls with age.
+
+\pagebreak
+## Question 5.4 (2 pages): 
+
+**It is possible that the effects of having daughters might be different for female and male legislators. Estimate four different models to think about this question:**
+
+- Model A:  Model 1
+- Model B: Model 1 on women only
+- Model C: Model 1 on men only
+- Model D: Model 1 with the addition of of $female$, $female\times ngirls$ and $female \times totchi$
+
+**Present all four regressions in one stargazer table with robust standard errors. Is there evidence that the effect of a daughter differs for male and female legislators?**
+
+**Code and Answer:**
+```{r, results = 'asis'}
+data_105_men <- data_105 %>% filter(female == 0)
+data_105_women <- data_105 %>% filter(female == 1)
+#filter data with men and women congress members
+
+
+modelA <- felm( aauw ~ ngirls+totchi, data = data_105)
+modelB <- felm( aauw ~ ngirls+totchi, data = data_105_women)
+modelC <- felm( aauw ~ ngirls+totchi, data = data_105_men)
+modelD <- felm( aauw ~ ngirls+totchi+female+(female*ngirls)+(female*totchi), data = data_105) 
+# 4 regression models
+
+stargazer(modelA, modelB, modelC,modelD,
+          se = list(modelA$rse, modelB$rse, modelC$rse,modelD$rse),
+          type = "latex",
+          title = "Regression Results - 5.4",
+          column.labels = c("Model A","Model B","Model C","Model D" ),
+          covariate.labels = c("Number of daughters", 
+                               "Total Children", 
+                               "Gender of congress member", 
+                               "Female*Num of daughters", 
+                               "Female*Tot chi"
+                                )) 
+#present reg using stargazer
+```
+Model B - regression with just the female congress members has a p-value greater than 0.1 for number of daughters, indicating that it is statistically insignificant. However, the regression with just the male members indicates that number of daughters positively influence AAUW score and it is statistically significant. The co-efficient for congress men is 5.071 with SE of 2.83 and for women members it is 3.043 with standard error of 10.07. Further, female*num of daughters has a negative impact on the AAUW score. This shows that daughter's influence their father's voting rights and it may not be the same for mothers. 
+
+
+\pagebreak
+## Question 5.4: 
+
+**How doe the coefficients in models B and C relate to those in model D? Specifically, how can I calculate $\beta_1$ and $\beta_2$ from models B and C using the results in model D?**
+
+**Answer:**
+Beta 1 Model B = Beta2 Model D + Beta 4 (Female*num of daughters) of Model D 
+Beta 1 Model C = Beta2 Model D 
+
+Beta 2 Model B = Beta2 Model D + Beta 4 (Female*Tot chi) of Model D 
+Beta 2 Model C = Beta2 Model D 
+
+This is because female = 1 and male = 0 a dummy variable. The default result is for the dummy variable, excluding the result of female variable. 
+
+\pagebreak
+## Question 5.5 (LAST QUESTION!): 
+
+**Lets reproduce the first set of columns in the top chart of figure 1:**
+
+- Filter your data so that it only includes representatives with two children
+
+- use ggplot, with geom_bar to generate this plot with the NOW score on the vertical axis and the number of daughters on the horizontal axis. 
+
+-  Hint: geom_bar(position = "dodge", stat = "summary", fun = "mean")
+
+**Make you graph as nice as possible!**
+
+**Code:**
+```{r}
+data_105_new <- data_105 %>% filter(totchi <= 2) 
+#filter data - members with <=2 children
+
+
+ggplot(data = data_105_new)+
+  aes(x = ngirls, y = aauw)+
+  geom_bar(position = "dodge", stat = "summary", fun = "mean", fill = "lightblue")+
+  labs(y = "Mean AAUW", x = "Number of daughters", 
+       title = "Mean AAUW by number of daughters")
+
+```
+
+
+
+
+ 
+
+
+

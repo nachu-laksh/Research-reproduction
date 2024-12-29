@@ -1,0 +1,330 @@
+---
+title: 'ECON 1190 Problem Set 4: Randomized Control Trials'
+author: "Claire Duquennois"
+date: ''
+output:
+  pdf_document:
+    number_sections: true
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Name: Nachu Lakshmanan**
+
+
+
+
+# Empirical Analysis using Data from Bryan, G., Chowdury, S., Mobarak, A. M. (2014, Econometrica)
+
+
+This exercise uses data from Bryan, Chowdhury, and Mobarak's paper, "Underinvestment in a Profitable Technology: the Case of Seasonal Migration in Bangladesh," published in *Econometrica* in 2014. This paper studies the effects of seasonal migration on household consumption during the lean season in rural Bangladesh by randomly subsidizing the cost of seasonal migration. 
+
+The data can be found by going to Mushfiq Mobarak's Yale faculty page, and then following the link to the data repository page on the Harvard dataverse. 
+
+
+**Submission instructions:**
+
+1) Knit your assignment in PDF.
+
+2) **Assignment shell extra credit:** You will receive a little extra credit if your answers line up correctly with the answer positions of the template on gradescope. For this to work 
+
+- **Work by putting your answers directly into this R markdown file that is pre-formatted for you!**
+
+- Make sure you have ONE question and answer per page (this is how the template is structured and  allows gradescope to easily find your answers), unless the question indicated that the answer will require two pages because of large tables. 
+
+- Your final PDF should be 20 pages. 
+
+- You can insert needed page breaks as illustrated below
+
+- Make sure you do not "print" the data. If you change the data, make sure you store with a structure like: newname<-modification(olddata). If you only type modification(olddata), R will display the data rather than saving your modifications
+
+
+3) Upload your assignment PDF to gradescope.
+
+
+\pagebreak
+
+# Set Up: 
+
+## Question: Loading the data -  Load any packages you will need and the data contained in the following files `Round1_Controls_Table1.dta` and `Round2.dta`. How many observations are contained in each of these datasets. What is the level of an observation (eg. city, city bby year, state, individuals, households)? (2 pages )
+
+**Code and Answer:**
+```{r, message=FALSE}
+#call libraries
+library(dplyr)
+library(stargazer)
+library(ggplot2)
+library(lfe)
+library(haven)
+
+
+#read data
+round1_data <- read_dta("C:\\Users\\Nachu\\Downloads\\Round1_Controls_Table1.dta")
+round2_data <- read_dta ("C:\\Users\\Nachu\\Downloads\\Round2.dta")
+
+#number of observations
+nrow(round1_data)
+nrow(round2_data)
+
+```
+
+There are 1900 observations in round 1 data and 1907 observations in round 2 data.The observations are at the household level.
+
+\pagebreak
+
+## Question: Keep the variables listed below. A description of each variable should appear in the column headers of the loaded data. 
+
+**Code:**
+```{r}
+#select variables
+round1_data <- round1_data %>% select(incentivized,q9pdcalq9,exp_total_pc_r1,
+                                      hhmembers_r1,tsaving_hh_r1) 
+round2_data <- round2_data %>% select(incentivized,average_exp2,
+                                      upazila,village,migrant,total_fish)
+                                  
+```
+
+
+\pagebreak
+
+## 1.**Question: Because the effects of the cash and credit treatment arms are similar and they find no effect of the information treatment, the authors choose to focus much of their analysis on the contrast between the incentivized group (cash and credit) and the not incentivised group (information and control). We will do the same. Regress all the baseline household characteristics still included in the round 1 data on the incentivized indicator. Present your results in a table. What is the equivalent table in the paper?** 
+Hint: make sure to use the same type of standard errors as used in the paper!
+
+**Code:**
+```{r, results = "asis"}
+
+#regressions for household charateristics
+reg1.1 <- felm(exp_total_pc_r1 ~ incentivized, data = round1_data)
+reg1.2 <- felm(q9pdcalq9 ~ incentivized, data = round1_data)
+reg1.3 <- felm(tsaving_hh_r1 ~ incentivized, data = round1_data)
+
+#add coef to display in format of paper
+coef1 <- round(sum(coef(reg1.1)),3)
+coef2  <- round(sum(coef(reg1.2)),3)
+coef3 <- round(sum(coef(reg1.3)),3)
+
+#present with stargazer - add lines for same format in paper
+stargazer(reg1.1,reg1.2,reg1.3,
+          type = "latex",
+          add.lines = list(c("Incentivised",coef1, coef2, coef3)),
+          covariate.labels = 
+            c("Difference", "Non-Incentivised","Incentivised"),
+          column.labels =
+            c("Total consumption", "Tot calories(pppd)","Tot saving in cash"),
+          title = "Effect of incentive on baseline household characteristics",
+          omit.stat = "all")
+
+```
+
+**Answer:** 
+The equivalent table in the paper is Table 1. 
+\pagebreak
+
+## **2. Question: How should the coefficients in the table above be interpreted? What should we look for in this table?**
+
+**Answer:**
+On providing an incentive to migrate, total consumption per household increases by 28.06 units, the calories consumed per person increases by 20.25 units,the total cash savings(conditional on positive savings) drop by 160.56 units. We look for the effect of intent to treat on the household characteristics at baseline. 
+
+\pagebreak
+
+## 3. **Question: Using the round 2 data, regress migrant on the incentivized treatment indicator. What is the equivalent table in the paper?**
+
+**Code:**
+```{r, results = "asis"}
+
+#*100 to present as % like in paper
+round2_data <- round2_data %>% mutate("migrant_new" = migrant*100)
+
+#regress migration and incentives
+reg2 <- felm(migrant_new ~ incentivized,data = round2_data)
+
+#add coef to present similar to paper
+coef_incentivised <- round(sum(coef(reg2)),3)
+
+stargazer(reg2,
+          type = "latex",
+          add.lines = list(c("Migration % with incentive",coef_incentivised)),
+          covariate.labels = c("Difference %", "Migration % without incentive","Migration % with incentive"),
+          title = "Effect of incentives on migration",
+          omit.stat = "all")
+```
+
+**Answer:** 
+The equivalent table is table II - Program take up rates. 
+\pagebreak
+
+## **Question: How should the coefficients in the table above be interpreted? Why is this table important? Is the constant meaningful?**
+
+**Answer:**
+The co-efficient in the above table show that on offering an incentive, 58% of the participants migrated vs 36% without incentive. The constant is meaningful as it shows % percentage migration(Y = 1) when there is no incentive (X = 0). B1 shows the increase in migration % on offering an incentive, i.e change in Y=1 when X becomes 1. The total migration % when incentive is offered is 36 plus an increase of 22 = 58%.
+\pagebreak
+
+## **Question: What is the underlying migration rate in the non-incentivized group? How might this change our interpretation of the results for the information treatment arm? Whose decision is impacted by the intervention? **
+
+**Answer:**
+The underlying migration rate is 36% for the non-incentivized group. The information treatment does not significantly increase migration. Through intervention with incentives, households who would not usually migrate are influenced to migrate. 
+
+\pagebreak
+
+## Question: Replicate the (exact) results presented in the third row of the fourth columns of table 3. Present your result in a table and interpret this result.
+
+Hint 1: The authors elect to drop one household observation because the reported value of total fish consumed in the household is very high. 
+
+Hint 2: To replicate the standard errors in the paper make sure to cluster your standard errors as the authors do. 
+
+
+
+**Code:**
+```{r, results = "asis"}
+
+#drop max fish value
+round2_data <- round2_data[round2_data$total_fish != max(round2_data$total_fish), ]
+
+#regress household consumption with incentives, district FE, cluster SE by village
+reg3 <- felm(average_exp2 ~ incentivized|upazila|0|village, data = round2_data )
+
+stargazer(reg3,
+          type = "latex",
+          title = "Effect of intent to treat on total consumption per HH(with FE)",
+          covariate.labels = "ITT",
+          column.labels = "Total consumption")
+
+```
+
+
+**Answer:**
+The table shows the effect of incentives on the total household consumption. The results are statistically significant.On offering an incentive to migrate, the total consumption per household increases by 68 taka. 
+
+
+
+\pagebreak
+
+## Question: Run the same estimate without fixed effects and present your results in a table. What happens to the coefficient and standard errors? Is this surprising? What does this tell us?
+**Code:**
+```{r, results = "asis"}
+reg4 <- felm(average_exp2 ~ incentivized|0|0|village, data = round2_data )
+
+stargazer(reg4,
+          type = "latex",
+          title = "Effect of intent to treat on total consumption per HH(without FE)",
+          covariate.labels = "ITT",
+          column.labels = "Total consumption")
+```
+
+**Answer:**
+Without the fixed effect, the co-efficient and standard error increases. This happens because upazila(district) level changes in consumption are reflected in the regression between Intent to treat and total consumption. Some districts consume more on average than others due to factors unrelated to incentive, and district is used a fixed effect to control for this effect. So the non FE result is not surprising. 
+
+
+\pagebreak
+
+
+## **Question: Why is the header of the first five columns of table 3 "ITT". What is meant by this and what does this tell us about how we should interpret these results?**
+
+**Answer:**
+ITT means Intent to Treat. This means that offering an incentive to migrate does not equal to migration/treatment. Whether they migrate or no, is the actual treatment effect. We should interpret results of Intent to treat with the understanding that the changes noticed in household consumption patterns are not due to migration but due to the random offer of incentives to treatment group villages. 
+
+\pagebreak
+
+## **Question: We are interested in estimating how migration affects total expenditures for the households that were induced to migrate by the cash and credit treatments as follows,**
+
+$$
+TotExp_{ivj}=\alpha+\beta_1Migrate_{ivj}+\varphi_j+\nu_{ivj}
+$$
+**where $Migrate_{ivj}$ is dummy indicator for if a member of household i in village v in subdistrict j migrated, and $\varphi_j$ are the subdistrict fixed effects. However it is not possible to identify in the data which households were induced by the treatment vs those who would have migrated either way. Furthermore, there is likely substantial selection between the households that select into migration versus those that do not. Propose a source of exogenous variation that can be used as an instrument to isolate "good" exogenous variation in migration. **
+
+**Answer:**
+We can use randomly selected village households as an instrumental variable to isolate "good" exogenous variation in migration. 
+\pagebreak
+
+## **Question: What is the first stage specification?**
+**Answer:**
+The first stage specification is:
+$$
+Migrant_{ivj}=\alpha+\beta_1Incentivized
+$$
+
+
+\pagebreak
+
+## **Question: Estimate the first stage and check that you have a strong (not weak) instrument for migration.**
+
+ Note: The first stage results reported in the paper appendix may differ slightly as explained in the table footnote.  
+
+**Code:**
+```{r, results = "asis"}
+reg5 <- felm(migrant~incentivized|upazila|0|village, data = round2_data)
+
+stargazer(reg5,
+          type = "latex",
+          title = "First stage regression")
+```
+**Answer:**
+Randomly assigned incentives at the village level increases migration by 18.3%. There is a reasonable correlation between incentives and migration.
+\pagebreak
+
+## **Question: Use your instrument to estimate the LATE (Local Average Treatment Effect), the impact of migration on total consumption for those induced to migrate by the treatment, as in columns 6 of table 3 in the paper. Interpret your results. **
+
+Note: If you just use Incentivized as your instrument, your estimates will not be exactly the same. If you wish to replicate the paper's coefficients exactly, you will need to use multiple instruments, one for each treatment arm. 
+
+**Code:**
+```{r, results = "asis"}
+#regress total consumption against migration with incentivized as instrument. 
+#upazila FE and SE clustered at village level. 
+reg6 <- felm(average_exp2 ~ 1|upazila|(migrant ~ incentivized)|
+               village, data = round2_data)
+
+stargazer(reg6,
+          type = "latex",
+          title = "LATE estimate",
+          covariate.labels = "IV - Incentivized",
+          column.labels = "Total consumption")
+
+
+```
+
+
+**Answer:**
+Migration,instrumented by incentive to migrate, increased the total consumption per household by 374.85 takas. The result is statistically significant.  
+
+
+\pagebreak
+
+
+## **Question: Why is this result different from the result in columns 4?  **
+
+**Answer:** 
+This result is different from the result in column 4 (ITT) because, ITT measures the effect of offering an incentive to migrate on household consumption, IV measures the effect of migration (which was instrumented through random incentive offer) on total consumption. 
+
+
+\pagebreak
+
+
+## **Question: Why is this value particularly relevant for policy decisions about the cost effectivness of the treatment in the context of this experiment.**
+
+**Answer:**
+This value is particularly important because it isolates the effect of incentive being offered on the total consumption. The effect incentives have on total consumption is scaled based on the correlation between incentives and migration. Policy makers can estimate improvements in total consumption and other welfare improvements in each household  as a % of the incentive offered. 
+
+\pagebreak
+
+## **Question: Suppose a policy maker found these results so compelling that they decided to make this a national policy. How would general equilibrium effects potentially change the impacts of this policy if it was implemented in a very large scale way?**
+
+**Answer:**
+If incentives to migrate was made a national policy, large scale migration from villages to cities might cause general equilibrium effects that alter supply and demand of workers in cities and villages. The wages in cities would drop and the wages in villages would increase. People migrating to cities may not be able to find jobs due to large scale migration. 
+
+\pagebreak
+
+## **Question: One major concern that is often brought up in discussions about RCT's is the problem of external validity. It is not always clear how informative the findings from a small scale research project in one context are for policy makers working on a different scale and in different contexts. What are your thoughts on the external validity of this particular project and RCT's in general? **
+
+**Answer:**
+Based on 'No Lean Season' program's failure when implemented on a large scale, this particular project does not seem to have external validity. RCTs are implemented with a lot more resources than it would be possible when implementing it as a policy on a larger scale. So there is little to no external validity. 
+
+\pagebreak
+
+
+
+ 
+
